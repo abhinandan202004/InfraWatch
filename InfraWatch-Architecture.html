@@ -143,7 +143,7 @@
     <tr><td>Resolved</td><td>Resolver team</td><td>Caller asked to confirm service is restored</td><td>Caller can reopen</td></tr>
     <tr><td>Runbook Pending</td><td>Resolver team + SRE</td><td>Runbook task auto-created, pre-filled with timeline &amp; evidence</td><td>Strict template, all fields mandatory</td></tr>
     <tr><td>Runbook Review</td><td>SRE / team lead</td><td>Approve or reject with comments</td><td><b>Close is blocked</b> until approved</td></tr>
-    <tr><td>Closed by Caller</td><td>Caller (Prod Support)</td><td>Runbook published to KB, event sent to AI pipeline</td><td>Only the caller can close</td></tr>
+    <tr><td>Closed</td><td>Caller, or any member of the caller's assignment group</td><td>Runbook published to KB, event sent to AI pipeline</td><td>Only after runbook approval</td></tr>
   </table>
   <h3>Mandatory runbook fields (structured so they can be used as training labels)</h3>
   <div class="chips">
@@ -218,17 +218,34 @@
     <div class="card"><h4>Phase 4 · Knowledge &amp; AI</h4><p>Backfill history, vector index, similar-incident suggestions → correlation → trained RCA model with feedback loop.</p></div>
   </div>
 
-  <h3>Decisions I need from you</h3>
+  <h3>Decisions confirmed</h3>
+  <ul class="clean">
+    <li><b>Standalone:</b> InfraWatch fully replaces ServiceNow — no sync/integration. Old tickets can optionally be imported once (CSV) for AI bootstrapping.</li>
+    <li><b>Scope:</b> side project for now → keep it lean; the architecture on tab 2 is the target shape, not the day-one deployment.</li>
+    <li><b>AI:</b> external LLM API is acceptable for now (scrub PII/secrets before sending); keep the LLM behind one service so it can be swapped for a self-hosted model later.</li>
+    <li><b>Closing:</b> the caller <i>or any member of the caller's assignment group</i> can close, and only after the runbook is approved.</li>
+  </ul>
+
+  <h3>Lean “side-project” stack (suggested)</h3>
+  <div class="grid">
+    <div class="card"><h4>Single deployable app</h4><p>One modular backend (monolith with clear modules for Incident, Change/Request, Teams/On-call, Runbook, Notifications) instead of 8 microservices.</p></div>
+    <div class="card"><h4>PostgreSQL for almost everything</h4><p>Tickets, teams, on-call, runbooks, <code>pgvector</code> for embeddings, full-text search. No separate vector DB / OpenSearch yet.</p></div>
+    <div class="card"><h4>Postgres-backed queue</h4><p>Use a simple job queue / LISTEN-NOTIFY instead of Kafka; the event model stays the same so it can be swapped later.</p></div>
+    <div class="card"><h4>Prometheus + Grafana-style data</h4><p>Prometheus (or VictoriaMetrics) + Loki via OpenTelemetry Collector; the app embeds/queries them and stores evidence snapshots in local disk or S3-compatible storage.</p></div>
+    <div class="card"><h4>Docker Compose</h4><p>Everything runs locally or on one VM; move to Kubernetes only if it grows.</p></div>
+    <div class="card"><h4>Email via SMTP</h4><p>Any SMTP relay for the group DL + on-call CC to start; inbound reply-parsing can come later.</p></div>
+  </div>
+
+  <h3>Still open (small, can be decided as we build)</h3>
   <ol class="q" style="padding:0;margin:0">
-    <li><b>Standalone or integrated?</b> Replace ServiceNow entirely, or keep a sync (import history / push tickets) with an existing ServiceNow instance?</li>
-    <li><b>Scale &amp; hosting:</b> number of services/hosts, users, incidents per month; cloud (which) vs on-prem; any data-residency limits.</li>
-    <li><b>Email platform:</b> Microsoft 365 / Google / own SMTP? Need inbound mail (reply-to-update-ticket)?</li>
-    <li><b>Identity:</b> Azure AD / Okta / other SSO for login and group mapping?</li>
-    <li><b>Existing monitoring:</b> already using Prometheus, Datadog, CloudWatch, Dynatrace, etc.? Build our own collection or wrap what exists?</li>
-    <li><b>Stack preference:</b> backend language/framework, front end, and team skills.</li>
-    <li><b>Closure rule edge cases:</b> if the caller is unavailable, who can close (delegate / auto-close after N days)? Is the runbook mandatory for every severity?</li>
-    <li><b>AI constraints:</b> may incident data go to an external LLM API, or must models be self-hosted?</li>
+    <li><b>Login:</b> simple email/password for the side project, or SSO (Google / Microsoft) from the start?</li>
+    <li><b>Email platform:</b> Gmail / Microsoft 365 / other SMTP? Do you want reply-by-email to update tickets?</li>
+    <li><b>Where it will be monitored:</b> what do you want to monitor first — real servers/VMs, Docker/Kubernetes, or a demo environment with sample data?</li>
+    <li><b>Stack preference:</b> backend language/framework and front end (e.g. Python/FastAPI or Node + React) — what are you most comfortable with?</li>
+    <li><b>Runbook rule:</b> mandatory for every severity, or only Sev1/Sev2?</li>
+    <li><b>Unattended closure:</b> if nobody from the caller's group closes a resolved incident, auto-close after N days?</li>
   </ol>
+
 </section>
 
 <script>
@@ -321,7 +338,7 @@ function draw(id,cfg){
     F('k0',5,0,'ai','Live context for AI','Current telemetry, recent changes, open incidents, pulse',''),
     F('k5',5,1,'ai','AI Root-Cause engine','Retrieves &amp; learns from KB; predicts probable root cause',13),
     F('k4',5,2,'ai','Knowledge base','Runbooks + tickets + telemetry linked by incident ID',12),
-    F('k3',5,3,'sup','Caller closes the incident','Only after the runbook is approved',11),
+    F('k3',5,3,'sup','Caller / caller’s group closes','Only after runbook approval; any member of the assignment group',11),
     F('k2',5,4,'gate','Runbook review gate','SRE / team lead approves; close is blocked until then',10),
     F('k1',5,5,'gate','Runbook / RCA (mandatory)','Strict analysis: timeline, root cause, fix, prevention',9),
     F('pp1',5,6,'sup','Production Pulse','Prod Support + SRE log known issues, releases, handovers','↻')
@@ -400,7 +417,7 @@ function draw(id,cfg){
     A('c1',6,0,3,'obs','Collectors &amp; agents','OpenTelemetry Collector · exporters · Fluent Bit · cloud monitoring APIs'),
     A('c2',6,3,1,'obs','Delivery signals','CI/CD · Git · K8s events · change calendar'),
     A('c3',6,4,1,'obs','CMDB / Service catalog','Ownership, dependencies'),
-    A('c4',6,5,3,'obs','Historical imports','Legacy ServiceNow / Jira tickets, postmortems, wikis'),
+    A('c4',6,5,3,'obs','Historical imports (optional)','One-time CSV import of old tickets, postmortems, wikis'),
     A('pr',7,0,8,'prod','Production Estate','Servers · containers / K8s · databases · APIs · queues · network · cloud services · third-party dependencies')
   ];
   const cx=c=>AX(c)+82.5;
@@ -436,7 +453,7 @@ function draw(id,cfg){
     S('st6',2,4,'team','Resolved','Caller asked to confirm'),
     S('st7',2,3,'gate','Runbook Pending','RCA task auto-created'),
     S('st8',2,2,'gate','Runbook Review','SRE / lead approves'),
-    S('st9',2,1,'sup','Closed by Caller','Only after approval'),
+    S('st9',2,1,'sup','Closed','By caller / caller’s group, after approval'),
     S('st10',2,0,'ai','Published to KB','Feeds AI training')
   ];
   const e=(f,fs,t,ts,o)=>Object.assign({f,fs,t,ts},o||{});
