@@ -229,8 +229,10 @@
   <h3>Lean “side-project” stack (suggested)</h3>
   <div class="grid">
     <div class="card"><h4>Single deployable app</h4><p>One modular backend (monolith with clear modules for Incident, Change/Request, Teams/On-call, Runbook, Notifications) instead of 8 microservices.</p></div>
-    <div class="card"><h4>PostgreSQL for almost everything</h4><p>Tickets, teams, on-call, runbooks, <code>pgvector</code> for embeddings, full-text search. No separate vector DB / OpenSearch yet.</p></div>
-    <div class="card"><h4>Postgres-backed queue</h4><p>Use a simple job queue / LISTEN-NOTIFY instead of Kafka; the event model stays the same so it can be swapped later.</p></div>
+    <div class="card"><h4>PostgreSQL — system of record</h4><p>Tickets, teams, on-call, runbooks, audit. Free: Neon / Supabase free tier, or the Docker container.</p></div>
+    <div class="card"><h4>Kafka — event backbone</h4><p>Topics <code>incident.*</code>, <code>change.*</code>, <code>runbook.*</code>, <code>alert.*</code>, <code>feedback.*</code>. Free: self-hosted single-broker KRaft in Docker (or a Confluent Cloud / Redpanda trial if you want managed).</p></div>
+    <div class="card"><h4>OpenSearch — search &amp; logs</h4><p>Full-text over tickets/runbooks, change events, optionally logs. Free: single-node in Docker (small heap), or the AWS OpenSearch 12-month free tier.</p></div>
+    <div class="card"><h4>Vector DB — similar-incident search</h4><p>Embeddings of runbooks/tickets/chat. Free: Qdrant Cloud free cluster (or Qdrant in Docker). OpenSearch k-NN is an alternative that avoids one extra service.</p></div>
     <div class="card"><h4>Prometheus + Grafana-style data</h4><p>Prometheus (or VictoriaMetrics) + Loki via OpenTelemetry Collector; the app embeds/queries them and stores evidence snapshots in local disk or S3-compatible storage.</p></div>
     <div class="card"><h4>Docker Compose</h4><p>Everything runs locally or on one VM; move to Kubernetes only if it grows.</p></div>
     <div class="card"><h4>Email via SMTP</h4><p>Any SMTP relay for the group DL + on-call CC to start; inbound reply-parsing can come later.</p></div>
@@ -397,7 +399,7 @@ function draw(id,cfg){
     A('v6',2,5,1,'plat','Notification Service','Templates, DL + CC resolution'),
     A('v7',2,6,1,'plat','Workflow &amp; SLA Engine','State machine, close-gate rules'),
     A('v8',2,7,1,'plat','AI RCA Service','Inference + feedback API'),
-    A('bus',3,0,8,'bus','Event Bus  (Kafka / Redpanda / NATS JetStream)','incident.* · change.* · runbook.* · alert.* · telemetry.anomaly · feedback.*  —  also feeds audit log, search indexing and ML pipelines'),
+    A('bus',3,0,8,'bus','Event Bus  (Apache Kafka, KRaft)','incident.* · change.* · runbook.* · alert.* · telemetry.anomaly · feedback.*  —  also feeds audit log, search indexing and ML pipelines'),
     A('m1',4,0,1,'ai','Feature extraction','Telemetry windows around incidents'),
     A('m2',4,1,1,'ai','Embedding pipeline','Tickets, runbooks, chat → vectors'),
     A('m3',4,2,1,'ai','Anomaly detection','Baselines, alert correlation'),
@@ -412,7 +414,7 @@ function draw(id,cfg){
     A('d4',5,3,1,'data','Events &amp; search index','OpenSearch: changes, tickets, runbooks'),
     A('d5',5,4,1,'data','Relational DB','PostgreSQL: tickets, teams, on-call'),
     A('d6',5,5,1,'data','Object store','S3 / MinIO: attachments, snapshots'),
-    A('d7',5,6,1,'data','Vector DB','pgvector / Qdrant'),
+    A('d7',5,6,1,'data','Vector DB','Qdrant (free tier / Docker)'),
     A('d8',5,7,1,'data','Data lake','Parquet: training sets, history'),
     A('c1',6,0,3,'obs','Collectors &amp; agents','OpenTelemetry Collector · exporters · Fluent Bit · cloud monitoring APIs'),
     A('c2',6,3,1,'obs','Delivery signals','CI/CD · Git · K8s events · change calendar'),
