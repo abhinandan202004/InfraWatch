@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InfraWatch – Data Flow & Technical Architecture</title>
+<style>
+  :root{--bg:#0a0f1e;--panel:#0f1630;--line:#25305a;--tx:#e6ebff;--mut:#8d9bc4;--acc:#4da3ff}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--tx);line-height:1.5}
+  header{padding:28px 40px 14px}
+  h1{margin:0;font-size:26px;letter-spacing:.2px}
+  h1 span{color:var(--acc)}
+  .sub{color:var(--mut);margin-top:4px;max-width:900px}
+  nav{display:flex;gap:6px;padding:0 40px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5;flex-wrap:wrap}
+  nav button{background:none;border:0;border-bottom:3px solid transparent;color:var(--mut);padding:12px 16px;font-size:14px;cursor:pointer;font-family:inherit}
+  nav button:hover{color:var(--tx)}
+  nav button.active{color:var(--tx);border-bottom-color:var(--acc);font-weight:600}
+  section.panel{display:none;padding:24px 40px 60px}
+  section.panel.active{display:block}
+  h2{margin:0 0 4px;font-size:20px}
+  h3{margin:28px 0 10px;font-size:16px}
+  p.lead{color:var(--mut);margin:0 0 16px;max-width:1000px}
+  .scroll{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px}
+  svg{display:block;width:100%;min-width:1150px;height:auto}
+  svg text{font-family:inherit}
+  .legend{display:flex;flex-wrap:wrap;gap:18px;margin:12px 0 0;color:var(--mut);font-size:12.5px}
+  .legend i{display:inline-block;width:30px;height:0;border-top:2px solid;vertical-align:middle;margin-right:6px}
+  .legend i.d{border-top-style:dashed}
+  /* node */
+  .nd{width:100%;height:100%;border-radius:10px;padding:6px 10px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;position:relative;border:1.5px solid var(--c);background:color-mix(in srgb,var(--c) 15%,#101733);font-family:inherit;color:var(--tx)}
+  .nd b{font-size:12.5px;line-height:1.25}
+  .nd small{font-size:10.5px;color:#b5c0e3;margin-top:3px;line-height:1.3}
+  .nd ul{margin:5px 0 0;padding-left:14px;text-align:left;font-size:10.5px;color:#b5c0e3;line-height:1.4}
+  .nd .bd{position:absolute;top:-9px;left:-9px;min-width:20px;height:20px;border-radius:10px;background:var(--c);color:#0a0f1e;font:700 11px/20px sans-serif;text-align:center;padding:0 4px}
+  .c-user{--c:#f5b942}.c-sup{--c:#4da3ff}.c-obs{--c:#2dd4a0}.c-plat{--c:#a78bfa}.c-team{--c:#fb923c}
+  .c-ai{--c:#f472b6}.c-data{--c:#5eead4}.c-gate{--c:#f87171}.c-bus{--c:#facc15}.c-edge{--c:#60a5fa}.c-prod{--c:#94a3b8}
+  .arch .nd b{font-size:12px}.arch .nd small{font-size:10px}
+  /* cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .card h4{margin:0 0 4px;font-size:13.5px}
+  .card p{margin:0;color:var(--mut);font-size:12.5px}
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:9px;margin-left:6px;vertical-align:middle}
+  .t-must{background:#14532d;color:#86efac}.t-should{background:#713f12;color:#fde68a}.t-later{background:#312e81;color:#c7d2fe}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:1000px){.two{grid-template-columns:1fr}}
+  ul.clean{margin:6px 0 0;padding-left:18px;color:var(--mut);font-size:13.5px}
+  ul.clean li{margin:4px 0}
+  ul.clean b{color:var(--tx)}
+  table{border-collapse:collapse;width:100%;font-size:13px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#151e40;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut)}
+  td:first-child{font-weight:600;white-space:nowrap}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid #f87171;background:#2a1520;color:#fecaca;border-radius:16px;padding:3px 11px;font-size:12px}
+  .phase{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  .phase .card{border-top:3px solid var(--acc)}
+  .q{counter-reset:q}
+  .q li{list-style:none;counter-increment:q;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px 10px 46px;margin:8px 0;position:relative;color:var(--mut);font-size:13.5px}
+  .q li::before{content:counter(q);position:absolute;left:12px;top:10px;width:24px;height:24px;border-radius:12px;background:var(--acc);color:#0a0f1e;font-weight:700;text-align:center;line-height:24px;font-size:12px}
+  .q li b{color:var(--tx)}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>InfraWatch</span> — Data Flow &amp; Technical Architecture</h1>
+  <div class="sub">Observability + ITSM (Incident · Request · Change) + Runbook knowledge base + AI root-cause prediction. Draft for review before build.</div>
+</header>
+<nav id="tabs">
+  <button data-t="p1" class="active">1 · End-to-end Flow</button>
+  <button data-t="p2">2 · Technical Architecture</button>
+  <button data-t="p3">3 · Incident Lifecycle</button>
+  <button data-t="p4">4 · AI &amp; Data Pipeline</button>
+  <button data-t="p5">5 · Phasing &amp; Open Questions</button>
+</nav>
+
+<!-- ============ 1 FLOW ============ -->
+<section class="panel active" id="p1">
+  <h2>End-to-end process &amp; data flow</h2>
+  <p class="lead">Follow the numbered badges. Lanes show who/what owns each step. Observability runs continuously (O); the incident path starts when a user reports a problem.</p>
+  <div class="scroll"><svg id="flow"></svg></div>
+  <div class="legend">
+    <span><i style="border-color:#6f7fa8"></i>Process flow</span>
+    <span><i class="d" style="border-color:#2dd4a0"></i>Observability data</span>
+    <span><i style="border-color:#f5b942"></i>Mail / notification</span>
+    <span><i class="d" style="border-color:#f472b6"></i>AI suggestions</span>
+    <span><i class="d" style="border-color:#4da3ff"></i>Context kept fresh by Prod Support / SRE</span>
+  </div>
+</section>
+
+<!-- ============ 2 ARCH ============ -->
+<section class="panel" id="p2">
+  <h2>Technical architecture (layered)</h2>
+  <p class="lead">Technology names are suggested defaults (open-source / cloud-agnostic) and can be swapped. Services read/write their own stores directly; only the main flows are drawn for clarity.</p>
+  <div class="scroll arch"><svg id="arch"></svg></div>
+  <div class="legend">
+    <span><i style="border-color:#6f7fa8"></i>Request / data path (double arrow = both ways)</span>
+    <span><i style="border-color:#2dd4a0"></i>Ingestion upward</span>
+    <span><i style="border-color:#f5b942"></i>Outbound notifications</span>
+  </div>
+  <div class="two">
+    <div>
+      <h3>Key design choices</h3>
+      <ul class="clean">
+        <li><b>Event-driven core:</b> every incident/change/runbook action is an event on the bus → audit trail, notifications, search indexing and AI training all consume the same stream.</li>
+        <li><b>Evidence snapshots:</b> when Prod Support attaches graphs/logs, a frozen copy (query + data) is saved in object storage, so training data survives retention limits of the live TSDB.</li>
+        <li><b>RBAC by group:</b> assignment groups drive visibility, DL mail routing and who may update the status bar.</li>
+        <li><b>OpenTelemetry-first:</b> vendor-neutral collection; the same signals feed dashboards, alerting and the AI.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Notification logic</h3>
+      <ul class="clean">
+        <li><b>To:</b> assignment-group distribution list (from Team Service).</li>
+        <li><b>CC:</b> current on-call(s) resolved from the roster at send time (devs maintain it in-app).</li>
+        <li><b>Triggers:</b> created, reassigned, severity change, status change, runbook due, closed.</li>
+        <li><b>Mail threading:</b> one thread per incident (Message-ID / In-Reply-To) so replies can be ingested into the timeline later.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3 LIFECYCLE ============ -->
+<section class="panel" id="p3">
+  <h2>Incident lifecycle &amp; status bar</h2>
+  <p class="lead">The status bar in the app mirrors this state machine. Any team involved can move the status forward; closing is locked until the runbook is approved and only the caller can perform it.</p>
+  <div class="scroll"><svg id="life"></svg></div>
+  <div class="legend">
+    <span><i style="border-color:#6f7fa8"></i>Normal progression</span>
+    <span><i class="d" style="border-color:#f87171"></i>Runbook rejected</span>
+    <span><i class="d" style="border-color:#f5b942"></i>Reopen</span>
+    <span><i class="d" style="border-color:#a78bfa"></i>Change / Request linkage</span>
+  </div>
+  <h3>Stage rules</h3>
+  <table>
+    <tr><th>Stage</th><th>Updated by</th><th>Automatic actions</th><th>Rules / gates</th></tr>
+    <tr><td>New</td><td>Production Support</td><td>Mail to group DL, on-call in CC; evidence snapshot saved</td><td>Mandatory: service, severity, assignment group, description</td></tr>
+    <tr><td>Assigned to Group</td><td>Prod Support / system</td><td>Response SLA timer starts</td><td>Group can be changed with a reason (mail to new group)</td></tr>
+    <tr><td>Assigned to Member</td><td>Group lead / on-call</td><td>Mail to assignee</td><td>Each group assigns only within its own team</td></tr>
+    <tr><td>Investigating</td><td>Assignee + collaborating teams</td><td>Update reminders by severity</td><td>Timeline notes required; collaborators added as watchers</td></tr>
+    <tr><td>Mitigated / Fix applied</td><td>Resolver team</td><td>Linked Change / Request status shown</td><td>If a prod change is needed, a Change must be linked</td></tr>
+    <tr><td>Resolved</td><td>Resolver team</td><td>Caller asked to confirm service is restored</td><td>Caller can reopen</td></tr>
+    <tr><td>Runbook Pending</td><td>Resolver team + SRE</td><td>Runbook task auto-created, pre-filled with timeline &amp; evidence</td><td>Strict template, all fields mandatory</td></tr>
+    <tr><td>Runbook Review</td><td>SRE / team lead</td><td>Approve or reject with comments</td><td><b>Close is blocked</b> until approved</td></tr>
+    <tr><td>Closed by Caller</td><td>Caller (Prod Support)</td><td>Runbook published to KB, event sent to AI pipeline</td><td>Only the caller can close</td></tr>
+  </table>
+  <h3>Mandatory runbook fields (structured so they can be used as training labels)</h3>
+  <div class="chips">
+    <span class="chip">Incident ID &amp; services</span><span class="chip">Impact &amp; duration</span><span class="chip">Timeline</span>
+    <span class="chip">How detected (and detection gap)</span><span class="chip">Root cause category (fixed taxonomy)</span>
+    <span class="chip">Trigger</span><span class="chip">Contributing factors</span><span class="chip">Mitigation steps</span>
+    <span class="chip">Permanent fix / Problem ticket</span><span class="chip">Telemetry evidence links</span>
+    <span class="chip">Prevention actions &amp; owners</span><span class="chip">Reviewer sign-off</span>
+  </div>
+</section>
+
+<!-- ============ 4 AI ============ -->
+<section class="panel" id="p4">
+  <h2>AI &amp; data pipeline — predicting root cause</h2>
+  <p class="lead">Runbooks are the ground truth. Everything else (telemetry, tickets, changes, chat) gives the model context. Start with retrieval over past incidents; add trained models once enough labelled incidents exist.</p>
+  <div class="scroll"><svg id="ai"></svg></div>
+  <div class="legend">
+    <span><i style="border-color:#6f7fa8"></i>Data / inference flow</span>
+    <span><i class="d" style="border-color:#f472b6"></i>Feedback loop (labels → re-index / retrain)</span>
+  </div>
+
+  <h3>Additional data sources worth capturing (beyond observability + tickets)</h3>
+  <div class="grid">
+    <div class="card"><h4>Deploys, releases &amp; config changes <span class="tag t-must">MUST</span></h4><p>CI/CD events, Git commits, feature-flag flips, infra-as-code applies. Most incidents follow a change.</p></div>
+    <div class="card"><h4>Service topology / CMDB <span class="tag t-must">MUST</span></h4><p>Dependency graph and ownership so the model knows what an upstream failure affects.</p></div>
+    <div class="card"><h4>War-room chat &amp; shift handovers <span class="tag t-must">MUST</span></h4><p>Teams/Slack incident channels and the Prod Support handover log — rich reasoning that never reaches the ticket.</p></div>
+    <div class="card"><h4>Alert history &amp; noise <span class="tag t-should">SHOULD</span></h4><p>Which alerts fired, in what order, which were ignored — great for correlation.</p></div>
+    <div class="card"><h4>SLO / error-budget burn <span class="tag t-should">SHOULD</span></h4><p>Customer-facing health signal; helps rank incidents by real impact.</p></div>
+    <div class="card"><h4>Kubernetes &amp; cloud events <span class="tag t-should">SHOULD</span></h4><p>Pod restarts, OOMKills, node drains, cloud provider health events and quota limits.</p></div>
+    <div class="card"><h4>DB slow queries &amp; locks <span class="tag t-should">SHOULD</span></h4><p>Query plans, wait events, connection pool saturation — frequent root causes.</p></div>
+    <div class="card"><h4>Synthetic checks / RUM <span class="tag t-should">SHOULD</span></h4><p>What users actually experience, independent of internal metrics.</p></div>
+    <div class="card"><h4>Third-party status &amp; certificates <span class="tag t-later">LATER</span></h4><p>Vendor status pages, certificate/domain expiry, DNS and network flow data.</p></div>
+    <div class="card"><h4>Security events <span class="tag t-later">LATER</span></h4><p>WAF, IAM and audit events — separates attacks / permission changes from faults.</p></div>
+    <div class="card"><h4>Calendar &amp; business context <span class="tag t-later">LATER</span></h4><p>Release freezes, month-end, campaigns, planned maintenance — explains traffic patterns.</p></div>
+    <div class="card"><h4>Historical backfill <span class="tag t-must">MUST</span></h4><p>Import old tickets/postmortems (e.g. from ServiceNow/Jira, wikis) to bootstrap the knowledge base from day one.</p></div>
+  </div>
+
+  <div class="two">
+    <div>
+      <h3>Keeping the AI in pace with production</h3>
+      <ul class="clean">
+        <li><b>Production Pulse:</b> a short daily entry by Prod Support/SRE — known issues, risky releases, freeze windows, workarounds. Fed straight into the AI context.</li>
+        <li><b>Shift handover as data:</b> handover notes are structured records, not free mail.</li>
+        <li><b>Change calendar feed:</b> upcoming &amp; recent changes injected into every suggestion.</li>
+        <li><b>Feedback buttons:</b> on every AI suggestion (“correct / partly / wrong”); the runbook's confirmed root cause is compared with the prediction automatically.</li>
+        <li><b>Weekly review:</b> SRE + Prod Support review prediction accuracy, stale runbooks and taxonomy gaps.</li>
+        <li><b>Staleness flags:</b> runbooks not validated after related architecture/changes are flagged for review.</li>
+        <li><b>Drift monitoring:</b> track accuracy over time and retrain/re-index on a schedule or after major platform changes.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Suggested AI approach (honest expectations)</h3>
+      <ul class="clean">
+        <li><b>Stage 1 – Retrieval (RAG):</b> “similar past incidents + their runbooks + current telemetry” summarised by an LLM. Works with tens of incidents.</li>
+        <li><b>Stage 2 – Correlation:</b> anomaly detection and alert/change correlation around incident time → ranked evidence.</li>
+        <li><b>Stage 3 – Supervised RCA classifier:</b> predict root-cause category once there are several hundred well-labelled incidents per major category.</li>
+        <li><b>Always show evidence</b> (graphs, log lines, change IDs) with each prediction; keep a human in the loop.</li>
+        <li><b>Data hygiene:</b> a fixed root-cause taxonomy and mandatory runbook fields matter more than model choice.</li>
+        <li><b>Privacy:</b> scrub PII/secrets before indexing; keep models and vector store inside your boundary if required.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5 PHASING ============ -->
+<section class="panel" id="p5">
+  <h2>Suggested phasing</h2>
+  <div class="phase">
+    <div class="card"><h4>Phase 1 · Foundation</h4><p>SSO + RBAC, teams &amp; on-call roster, incident CRUD, group mail with on-call CC, status bar, timeline.</p></div>
+    <div class="card"><h4>Phase 2 · Observability</h4><p>OTel collection, dashboards/alerts, one-click “attach evidence snapshot” to incidents.</p></div>
+    <div class="card"><h4>Phase 3 · ITSM completeness</h4><p>Change &amp; Request workflows with approvals, SLA engine, runbook template and close-gate, Problem records for repeat incidents.</p></div>
+    <div class="card"><h4>Phase 4 · Knowledge &amp; AI</h4><p>Backfill history, vector index, similar-incident suggestions → correlation → trained RCA model with feedback loop.</p></div>
+  </div>
+
+  <h3>Decisions I need from you</h3>
+  <ol class="q" style="padding:0;margin:0">
+    <li><b>Standalone or integrated?</b> Replace ServiceNow entirely, or keep a sync (import history / push tickets) with an existing ServiceNow instance?</li>
+    <li><b>Scale &amp; hosting:</b> number of services/hosts, users, incidents per month; cloud (which) vs on-prem; any data-residency limits.</li>
+    <li><b>Email platform:</b> Microsoft 365 / Google / own SMTP? Need inbound mail (reply-to-update-ticket)?</li>
+    <li><b>Identity:</b> Azure AD / Okta / other SSO for login and group mapping?</li>
+    <li><b>Existing monitoring:</b> already using Prometheus, Datadog, CloudWatch, Dynatrace, etc.? Build our own collection or wrap what exists?</li>
+    <li><b>Stack preference:</b> backend language/framework, front end, and team skills.</li>
+    <li><b>Closure rule edge cases:</b> if the caller is unavailable, who can close (delegate / auto-close after N days)? Is the runbook mandatory for every severity?</li>
+    <li><b>AI constraints:</b> may incident data go to an external LLM API, or must models be self-hosted?</li>
+  </ol>
+</section>
+
+<script>
+/* ===================== tiny diagram engine ===================== */
+const NS='http://www.w3.org/2000/svg';
+function el(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(text!==undefined)e.textContent=text;if(parent)parent.appendChild(e);return e;}
+const COL={grey:'#6f7fa8',green:'#2dd4a0',amber:'#f5b942',pink:'#f472b6',red:'#f87171',blue:'#4da3ff',violet:'#a78bfa'};
+function anchor(n,s){return s==='r'?[n.x+n.w,n.y+n.h/2]:s==='l'?[n.x,n.y+n.h/2]:s==='t'?[n.x+n.w/2,n.y]:[n.x+n.w/2,n.y+n.h];}
+function route(p1,s1,p2,s2){
+  const h1=s1==='l'||s1==='r',h2=s2==='l'||s2==='r',[x1,y1]=p1,[x2,y2]=p2,pts=[p1];
+  if(h1&&h2){if(y1!==y2){const mx=(x1+x2)/2;pts.push([mx,y1],[mx,y2]);}}
+  else if(!h1&&!h2){if(x1!==x2){const my=(y1+y2)/2;pts.push([x1,my],[x2,my]);}}
+  else if(h1&&!h2)pts.push([x2,y1]); else pts.push([x1,y2]);
+  pts.push(p2);
+  return pts.filter((p,i)=>i===0||p[0]!==pts[i-1][0]||p[1]!==pts[i-1][1]);
+}
+function rounded(pts,r){
+  let d=`M${pts[0][0]} ${pts[0][1]}`;
+  for(let i=1;i<pts.length-1;i++){
+    const p0=pts[i-1],p1=pts[i],p2=pts[i+1];
+    const l1=Math.hypot(p1[0]-p0[0],p1[1]-p0[1]),l2=Math.hypot(p2[0]-p1[0],p2[1]-p1[1]);
+    const rr=Math.min(r,l1/2,l2/2);
+    const a=[p1[0]+(p0[0]-p1[0])*rr/l1,p1[1]+(p0[1]-p1[1])*rr/l1];
+    const b=[p1[0]+(p2[0]-p1[0])*rr/l2,p1[1]+(p2[1]-p1[1])*rr/l2];
+    d+=` L${a[0]} ${a[1]} Q${p1[0]} ${p1[1]} ${b[0]} ${b[1]}`;
+  }
+  const L=pts[pts.length-1];return d+` L${L[0]} ${L[1]}`;
+}
+function draw(id,cfg){
+  const svg=document.getElementById(id);
+  svg.setAttribute('viewBox',`0 0 ${cfg.w} ${cfg.h}`);
+  const defs=el('defs',{},svg);
+  for(const k in COL){const m=el('marker',{id:`${id}-m-${k}`,viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:6,markerHeight:6,orient:'auto-start-reverse'},defs);el('path',{d:'M0 0L10 5L0 10z',fill:COL[k]},m);}
+  (cfg.lanes||[]).forEach(l=>{
+    el('rect',{x:0,y:l.y,width:cfg.w,height:l.h,rx:8,fill:'rgba(255,255,255,.03)',stroke:'#25305a'},svg);
+    if(l.side){
+      el('rect',{x:0,y:l.y,width:34,height:l.h,rx:8,fill:'rgba(77,163,255,.10)'},svg);
+      el('text',{x:17,y:l.y+l.h/2,transform:`rotate(-90 17 ${l.y+l.h/2})`,'text-anchor':'middle','dominant-baseline':'middle',fill:'#aebbe6','font-size':12,'font-weight':700,'letter-spacing':.8},svg,l.label.toUpperCase());
+    }else{
+      el('text',{x:14,y:l.y+17,fill:'#8d9bc4','font-size':11,'font-weight':700,'letter-spacing':1.2},svg,l.label.toUpperCase());
+    }
+  });
+  (cfg.heads||[]).forEach(h=>el('text',{x:h.x,y:h.y,fill:'#8d9bc4','font-size':11,'font-weight':700,'letter-spacing':1.2,'text-anchor':'middle'},svg,h.t));
+  const N={};cfg.nodes.forEach(n=>N[n.id]=n);
+  const labels=[];
+  cfg.edges.forEach(e=>{
+    const pts=e.pts?e.pts(N):route(anchor(N[e.f],e.fs),e.fs,anchor(N[e.t],e.ts),e.ts);
+    const c=e.c||'grey';
+    const p=el('path',{d:rounded(pts,9),fill:'none',stroke:COL[c],'stroke-width':1.8,'stroke-linejoin':'round','marker-end':`url(#${id}-m-${c})`},svg);
+    if(e.bi)p.setAttribute('marker-start',`url(#${id}-m-${c})`);
+    if(e.dash)p.setAttribute('stroke-dasharray','6 4');
+    if(e.label){
+      let best=0,bi=0;
+      for(let i=0;i<pts.length-1;i++){const l=Math.hypot(pts[i+1][0]-pts[i][0],pts[i+1][1]-pts[i][1]);if(l>best){best=l;bi=i;}}
+      const a=pts[bi],b=pts[bi+1],mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,horiz=Math.abs(b[1]-a[1])<1;
+      labels.push({x:horiz?mx:mx+8,y:horiz?my-6:my+3,t:e.label,anchor:horiz?'middle':'start',c:COL[c]});
+    }
+  });
+  cfg.nodes.forEach(n=>{
+    const fo=el('foreignObject',{x:n.x,y:n.y,width:n.w,height:n.h},svg);fo.style.overflow='visible';
+    const d=document.createElement('div');d.className='nd c-'+n.cls;
+    let h='';if(n.badge)h+=`<span class="bd">${n.badge}</span>`;
+    h+=`<b>${n.title}</b>`;if(n.sub)h+=`<small>${n.sub}</small>`;if(n.html)h+=n.html;
+    d.innerHTML=h;fo.appendChild(d);
+  });
+  labels.forEach(l=>el('text',{x:l.x,y:l.y,'text-anchor':l.anchor,fill:l.c,'font-size':10.5,'font-weight':600,stroke:'#0f1630','stroke-width':4,'paint-order':'stroke','stroke-linejoin':'round'},svg,l.t));
+}
+
+/* ===================== 1. FLOW ===================== */
+(function(){
+  const FX=c=>60+c*215,LY=l=>20+l*150;
+  const F=(id,lane,col,cls,title,sub,badge)=>({id,x:FX(col),y:LY(lane)+22,w:185,h:96,cls,title,sub,badge});
+  const laneNames=['Users','Prod Support','Observability','Incident App','Resolver Teams','Knowledge + AI'];
+  const nodes=[
+    F('u1',0,0,'user','User spots an issue in Production','Slowness, errors or outage noticed by a business/app user',1),
+    F('p1',1,0,'sup','Prod Support receives the report','Phone / chat / mail; the user becomes the “caller”',2),
+    F('o1',2,0,'obs','Observability collects continuously','CPU, memory, disk, latency, errors, logs, traces','O'),
+    F('o2',2,1,'obs','Common dashboards &amp; alerts','One shared UI for everyone; alert rules &amp; anomaly flags','O'),
+    F('p2',1,1,'sup','Triage using observability','Validate impact; pick graphs / logs / notes to share',3),
+    F('p3',1,2,'sup','Create Incident','Severity, service, assignment group, notes + telemetry evidence',4),
+    F('i3',3,1,'plat','Visible in the app','Ticket board, search, detail page with status bar','6b'),
+    F('i1',3,2,'plat','Incident record created','Ticket + frozen evidence snapshot + timeline',5),
+    F('i2',3,3,'plat','Notification engine','Mail to group DL; on-call kept in CC','6a'),
+    F('s1',3,5,'plat','Status bar, updated by every team','New → Assigned → Investigating → Mitigated → Resolved','8a'),
+    F('t1',3,6,'plat','Change &amp; Request records','Linked tickets, approvals, implementation status','8b'),
+    F('r0',4,3,'team','Devs set on-call roster in app','Primary / secondary per group, shift schedule','P'),
+    F('r1',4,4,'team','Group assigns to a member','Each team assigns within itself; groups can hand over',7),
+    F('r2',4,5,'team','Investigate &amp; resolve','All involved teams post updates and collaborate',8),
+    F('r3',4,6,'team','Raise Change / Request if needed','Linked to the incident; goes through approval','8b'),
+    F('k0',5,0,'ai','Live context for AI','Current telemetry, recent changes, open incidents, pulse',''),
+    F('k5',5,1,'ai','AI Root-Cause engine','Retrieves &amp; learns from KB; predicts probable root cause',13),
+    F('k4',5,2,'ai','Knowledge base','Runbooks + tickets + telemetry linked by incident ID',12),
+    F('k3',5,3,'sup','Caller closes the incident','Only after the runbook is approved',11),
+    F('k2',5,4,'gate','Runbook review gate','SRE / team lead approves; close is blocked until then',10),
+    F('k1',5,5,'gate','Runbook / RCA (mandatory)','Strict analysis: timeline, root cause, fix, prevention',9),
+    F('pp1',5,6,'sup','Production Pulse','Prod Support + SRE log known issues, releases, handovers','↻')
+  ];
+  const e=(f,fs,t,ts,o)=>Object.assign({f,fs,t,ts},o||{});
+  const edges=[
+    e('u1','b','p1','t'),
+    e('p1','r','p2','l'),
+    e('o1','r','o2','l',{c:'green'}),
+    e('o2','t','p2','b',{c:'green',dash:1,label:'live data'}),
+    e('p2','r','p3','l',{label:'evidence'}),
+    e('p3','b','i1','t',{label:'incident + evidence'}),
+    e('i1','l','i3','r'),
+    e('i1','r','i2','l'),
+    e('r0','t','i2','b',{c:'amber',dash:1,label:'on-call → CC'}),
+    e('i2','r','r1','t',{c:'amber',label:'mail: group DL'}),
+    e('r1','r','r2','l'),
+    e('r2','t','s1','b',{dash:1,label:'status updates'}),
+    e('r2','r','r3','l',{label:'if change needed'}),
+    e('r3','t','t1','b',{dash:1,label:'linked'}),
+    e('r2','b','k1','t',{label:'when resolved'}),
+    e('k1','l','k2','r'),
+    e('k2','l','k3','r',{label:'approved'}),
+    e('k3','l','k4','r',{label:'closed → KB'}),
+    e('k4','l','k5','r'),
+    e('k5','t','i3','b',{c:'pink',dash:1,label:'RCA suggestions on new incidents'}),
+    e('o1','b','k0','t',{c:'green',dash:1,label:'telemetry history & live'}),
+    e('k0','r','k5','l',{c:'pink',dash:1}),
+    {c:'blue',dash:1,label:'keeps AI context fresh',pts:N=>{const a=N.pp1,b=N.k0,y=a.y+a.h+36;return[[a.x+a.w/2,a.y+a.h],[a.x+a.w/2,y],[b.x+b.w/2,y],[b.x+b.w/2,b.y+b.h]];}}
+  ];
+  draw('flow',{w:1560,h:945,nodes,edges,lanes:laneNames.map((n,i)=>({y:LY(i),h:140,label:n,side:true}))});
+})();
+
+/* ===================== 2. ARCH ===================== */
+(function(){
+  const AX=c=>20+c*185,AY=r=>20+r*140+30;
+  const A=(id,r,c,span,cls,title,sub)=>({id,x:AX(c),y:AY(r),w:165+(span-1)*185,h:64,cls,title,sub});
+  const rows=['1 · Clients','2 · Edge','3 · Core services','4 · Event backbone','5 · AI / ML platform','6 · Data stores','7 · Collection & integration','8 · Production estate'];
+  const nodes=[
+    A('a1',0,0,1,'user','Observability Dashboards','Common UI for all users'),
+    A('a2',0,1,1,'user','Incident &amp; Ticket Console','Create · assign · status bar'),
+    A('a3',0,2,1,'user','Runbook Editor','Mandatory RCA form'),
+    A('a4',0,3,1,'user','Teams &amp; On-call Admin','Groups, rosters, rotations'),
+    A('a5',0,4,1,'user','AI RCA Panel','Suggested root causes'),
+    A('a6',0,5,1,'user','Email','Group DL + on-call CC'),
+    A('a7',0,6,1,'user','Teams / Slack (optional)','ChatOps notifications'),
+    A('a8',0,7,1,'user','Mobile push / pager','Critical on-call paging'),
+    A('gw',1,0,3,'edge','API Gateway · SSO (OIDC) · RBAC','AuthN/Z per team, rate limits, audit log'),
+    A('rt',1,3,2,'edge','Realtime channel','WebSocket / SSE: live status bar &amp; alerts'),
+    A('cn',1,5,3,'edge','Outbound connectors','SMTP / M365 Graph / SES · chat webhooks · pager API'),
+    A('v1',2,0,1,'plat','Observability Query Svc','PromQL / LogQL / trace proxy, snapshots'),
+    A('v2',2,1,1,'plat','Incident Service','Tickets, timeline, severity, SLA'),
+    A('v3',2,2,1,'plat','Change &amp; Request Svc','Approvals, linked to incidents'),
+    A('v4',2,3,1,'plat','Team &amp; On-call Svc','Groups, rosters, assignment'),
+    A('v5',2,4,1,'plat','Runbook &amp; KB Service','RCA templates, review gate'),
+    A('v6',2,5,1,'plat','Notification Service','Templates, DL + CC resolution'),
+    A('v7',2,6,1,'plat','Workflow &amp; SLA Engine','State machine, close-gate rules'),
+    A('v8',2,7,1,'plat','AI RCA Service','Inference + feedback API'),
+    A('bus',3,0,8,'bus','Event Bus  (Kafka / Redpanda / NATS JetStream)','incident.* · change.* · runbook.* · alert.* · telemetry.anomaly · feedback.*  —  also feeds audit log, search indexing and ML pipelines'),
+    A('m1',4,0,1,'ai','Feature extraction','Telemetry windows around incidents'),
+    A('m2',4,1,1,'ai','Embedding pipeline','Tickets, runbooks, chat → vectors'),
+    A('m3',4,2,1,'ai','Anomaly detection','Baselines, alert correlation'),
+    A('m4',4,3,1,'ai','RAG retrieval','Similar incidents + runbooks'),
+    A('m5',4,4,1,'ai','LLM inference','Root-cause reasoning, summaries'),
+    A('m6',4,5,1,'ai','RCA classifier (phase 3)','Supervised; needs labelled history'),
+    A('m7',4,6,1,'ai','Model registry &amp; eval','Versioning, accuracy tracking'),
+    A('m8',4,7,1,'ai','Feedback capture','Accept / reject → labels'),
+    A('d1',5,0,1,'data','Metrics TSDB','Prometheus + Mimir / VictoriaMetrics'),
+    A('d2',5,1,1,'data','Logs','Loki / OpenSearch'),
+    A('d3',5,2,1,'data','Traces','Tempo / Jaeger'),
+    A('d4',5,3,1,'data','Events &amp; search index','OpenSearch: changes, tickets, runbooks'),
+    A('d5',5,4,1,'data','Relational DB','PostgreSQL: tickets, teams, on-call'),
+    A('d6',5,5,1,'data','Object store','S3 / MinIO: attachments, snapshots'),
+    A('d7',5,6,1,'data','Vector DB','pgvector / Qdrant'),
+    A('d8',5,7,1,'data','Data lake','Parquet: training sets, history'),
+    A('c1',6,0,3,'obs','Collectors &amp; agents','OpenTelemetry Collector · exporters · Fluent Bit · cloud monitoring APIs'),
+    A('c2',6,3,1,'obs','Delivery signals','CI/CD · Git · K8s events · change calendar'),
+    A('c3',6,4,1,'obs','CMDB / Service catalog','Ownership, dependencies'),
+    A('c4',6,5,3,'obs','Historical imports','Legacy ServiceNow / Jira tickets, postmortems, wikis'),
+    A('pr',7,0,8,'prod','Production Estate','Servers · containers / K8s · databases · APIs · queues · network · cloud services · third-party dependencies')
+  ];
+  const cx=c=>AX(c)+82.5;
+  const edges=[];
+  // r1 above r2 (rows), arrows at columns; up=true => arrow points to the upper row
+  const vl=(r1,r2,cols,o)=>cols.forEach((c,i)=>edges.push(Object.assign({pts:()=>{const x=cx(c),y1=AY(r1)+64,y2=AY(r2);return o.up?[[x,y2],[x,y1]]:[[x,y1],[x,y2]];},label:i===0?o.label:undefined},o)));
+  vl(0,1,[0,1,2,3,4],{bi:1,label:'HTTPS · REST / GraphQL'});
+  vl(1,2,[0,1,2,3,4],{bi:1,label:'authenticated API calls'});
+  vl(2,3,[0,1,2,3,4,5,6,7],{bi:1,label:'publish / subscribe'});
+  vl(3,4,[0,1,2,3,4,5,6,7],{bi:1,label:'events in · results out'});
+  vl(4,5,[0,1,2,3,4,5,6,7],{bi:1,label:'read / write'});
+  vl(5,6,[0,1,2,3,4,5,6,7],{up:1,c:'green',label:'ingest'});
+  vl(6,7,[0,1,2,3,4],{up:1,c:'green',label:'telemetry · deploys · metadata'});
+  // notifications
+  edges.push({c:'amber',label:'mail: group DL + on-call CC',pts:()=>[[cx(5),AY(2)],[cx(5),AY(1)+64]]});
+  edges.push({c:'amber',pts:()=>[[cx(5),AY(1)],[cx(5),AY(0)+64]]});
+  edges.push({c:'amber',pts:()=>[[cx(6),AY(1)],[cx(6),AY(0)+64]]});
+  edges.push({c:'amber',pts:()=>[[cx(7),AY(1)],[cx(7),AY(0)+64]]});
+  draw('arch',{w:1500,h:1130,nodes,edges,lanes:rows.map((n,i)=>({y:20+i*140,h:104,label:n}))});
+})();
+
+/* ===================== 3. LIFECYCLE ===================== */
+(function(){
+  const X=c=>40+c*215,Y=r=>[30,170,320][r];
+  const S=(id,r,c,cls,title,sub)=>({id,x:X(c),y:Y(r),w:170,h:72,cls,title,sub});
+  const nodes=[
+    S('chg',0,3,'plat','Change / Request','Optional, linked to incident'),
+    S('st1',1,0,'sup','New','Created by Prod Support'),
+    S('st2',1,1,'plat','Assigned to Group','Group DL mailed; on-call in CC'),
+    S('st3',1,2,'team','Assigned to Member','Lead / on-call picks owner'),
+    S('st4',1,3,'team','Investigating','Updates from all teams'),
+    S('st5',1,4,'team','Mitigated / Fix applied','Service restored'),
+    S('st6',2,4,'team','Resolved','Caller asked to confirm'),
+    S('st7',2,3,'gate','Runbook Pending','RCA task auto-created'),
+    S('st8',2,2,'gate','Runbook Review','SRE / lead approves'),
+    S('st9',2,1,'sup','Closed by Caller','Only after approval'),
+    S('st10',2,0,'ai','Published to KB','Feeds AI training')
+  ];
+  const e=(f,fs,t,ts,o)=>Object.assign({f,fs,t,ts},o||{});
+  const edges=[
+    e('st1','r','st2','l'),e('st2','r','st3','l'),e('st3','r','st4','l'),e('st4','r','st5','l'),
+    e('st5','b','st6','t'),e('st6','l','st7','r'),e('st7','l','st8','r'),
+    e('st8','l','st9','r',{label:'approved'}),e('st9','l','st10','r'),
+    e('st4','t','chg','b',{c:'violet',dash:1,label:'needs change'}),
+    e('chg','r','st5','t',{c:'violet',dash:1}),
+    {c:'red',dash:1,label:'rejected → rework',pts:N=>{const a=N.st8,b=N.st7,y=a.y+a.h+30;return[[a.x+a.w/2,a.y+a.h],[a.x+a.w/2,y],[b.x+b.w/2,y],[b.x+b.w/2,b.y+b.h]];}},
+    {c:'amber',dash:1,label:'reopen (caller disagrees)',pts:N=>{const a=N.st9,b=N.st4,y=(N.st4.y+N.st4.h+a.y)/2;return[[a.x+a.w/2,a.y],[a.x+a.w/2,y],[b.x+b.w/2,y],[b.x+b.w/2,b.y+b.h]];}}
+  ];
+  draw('life',{w:1110,h:460,nodes,edges});
+})();
+
+/* ===================== 4. AI ===================== */
+(function(){
+  const X=c=>30+c*235,Y=r=>60+r*90;
+  const B=(id,col,y,h,cls,title,sub,html)=>({id,x:X(col),y,w:175,h,cls,title,sub,html});
+  const S=(id,r,t,s)=>B(id,0,Y(r),70,'obs',t,s);
+  const nodes=[
+    S('s1',0,'Observability','metrics · logs · traces'),
+    S('s2',1,'Incident tickets','details + status timeline'),
+    S('s3',2,'Runbooks / RCA','structured, approved'),
+    S('s4',3,'Changes','deploys · config · feature flags'),
+    S('s5',4,'War-room chat &amp; handovers','Teams/Slack + shift notes'),
+    S('s6',5,'CMDB / topology','ownership &amp; dependencies'),
+    B('ing',1,60,520,'plat','Ingest, normalise &amp; link','',`<ul><li>Strip PII / secrets</li><li>Align timestamps (UTC)</li><li>Tag service / component</li><li>Join by incident ID + time window</li><li>Data-quality checks</li><li>Evidence snapshot capture</li></ul>`),
+    B('vec',2,60,150,'data','Vector index','','<ul><li>Tickets, runbooks, chat</li><li>Embeddings for similarity search</li></ul>'),
+    B('feat',2,240,150,'data','Feature store','','<ul><li>Telemetry windows before / during incident</li><li>Change &amp; alert counts</li></ul>'),
+    B('grf',2,420,150,'data','Dependency graph','','<ul><li>Service → service links</li><li>Blast-radius &amp; ownership</li></ul>'),
+    B('m1',3,60,150,'ai','Similar-incident retrieval (RAG)','','<ul><li>Stage 1 – start here</li><li>LLM summarises past fixes</li></ul>'),
+    B('m2',3,240,150,'ai','Anomaly &amp; correlation','','<ul><li>Stage 2</li><li>Which signal moved first?</li></ul>'),
+    B('m3',3,420,150,'ai','RCA classifier','','<ul><li>Stage 3 – needs labelled history</li><li>Predicts root-cause category</li></ul>'),
+    B('o1',4,60,150,'sup','Probable root causes','','<ul><li>Ranked, with evidence links</li><li>Shown in incident view</li></ul>'),
+    B('o2',4,240,150,'sup','Suggested runbook &amp; fix','','<ul><li>Steps from similar past incidents</li></ul>'),
+    B('o3',4,420,150,'sup','Proactive alerts','','<ul><li>Early warnings to Prod Support &amp; SRE</li></ul>'),
+    B('fb',5,150,300,'gate','Feedback &amp; labels','','<ul><li>Correct / partly / wrong on each suggestion</li><li>Runbook’s confirmed root cause = ground truth</li><li>Accuracy dashboard, weekly review</li></ul>')
+  ];
+  const e=(f,fs,t,ts,o)=>Object.assign({f,fs,t,ts},o||{});
+  const edges=[];
+  ['s1','s2','s3','s4','s5','s6'].forEach(s=>edges.push(e(s,'r','ing','l')));
+  ['vec','feat','grf'].forEach(s=>edges.push(e('ing','r',s,'l')));
+  edges.push(e('vec','r','m1','l'),e('feat','r','m2','l'),e('feat','r','m3','l'),e('grf','r','m2','l'),e('grf','r','m3','l'));
+  edges.push(e('m1','r','o1','l'),e('m1','r','o2','l'),e('m2','r','o3','l'),e('m2','r','o1','l'),e('m3','r','o1','l'));
+  ['o1','o2','o3'].forEach(s=>edges.push(e(s,'r','fb','l')));
+  edges.push({c:'pink',dash:1,label:'new labels → re-index / retrain',pts:N=>{const a=N.fb,b=N.grf,y=640;return[[a.x+a.w/2,a.y+a.h],[a.x+a.w/2,y],[b.x+b.w/2,y],[b.x+b.w/2,b.y+b.h]];}});
+  const heads=['SOURCES','INGEST & LINK','KNOWLEDGE STORES','MODELS (STAGED)','OUTPUT TO PEOPLE','FEEDBACK LOOP'].map((t,i)=>({t,x:X(i)+87.5,y:36}));
+  draw('ai',{w:1420,h:680,nodes,edges,heads});
+})();
+
+/* ===================== tabs ===================== */
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('active',x===b));
+  document.querySelectorAll('section.panel').forEach(p=>p.classList.toggle('active',p.id===b.dataset.t));
+  window.scrollTo(0,0);
+});
+</script>
+</body>
+</html>
