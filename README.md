@@ -98,9 +98,10 @@ While designed for high-scale enterprise expansion, InfraWatch starts as a light
 | **Backend** | Single Modular Monolith | Clear separation of Incident, Change/Request, Team/On-call, Runbook, and AI services |
 | **Database** | PostgreSQL (Neon/Supabase free tier or Docker) | System of record: tickets, rosters, runbooks, audit |
 | **Event Bus** | Apache Kafka (single-broker KRaft in Docker) | Topics `incident.*`, `change.*`, `runbook.*`, `alert.*`, `feedback.*` drive notifications, indexing and AI jobs |
-| **Search** | OpenSearch (single-node Docker, or AWS 12-month free tier) | Full-text search over tickets, runbooks and change events |
+| **Search** | ZincSearch (single binary, ~100 MB RAM) | Full-text search over tickets and runbooks; falls back to SQL if down |
 | **Vector DB** | Qdrant (Cloud free cluster or Docker) | Embeddings for similar-incident RAG search |
 | **Observability** | OpenTelemetry + Prometheus / Loki | Standardized metric collection, log aggregation, and snapshot storage |
+| **Backend / Frontend** | Python FastAPI + React (Vite, TypeScript) | JWT login + Google SSO |
 | **LLM Interface** | External API / Local LLM Proxy | Pluggable interface with automatic PII/secret scrubbing |
 | **Deployment** | Docker Compose | One-command local setup for seamless development |
 
@@ -120,12 +121,50 @@ To guarantee high-quality AI training labels, runbooks enforce a structured sche
 
 ---
 
+## Quick Start (Phase 1)
+
+```bash
+cp .env.example .env            # set JWT_SECRET; optionally GOOGLE_CLIENT_ID
+docker compose up --build
+```
+
+| Service | URL |
+| :--- | :--- |
+| App (React) | http://localhost:5173 |
+| API docs (Swagger) | http://localhost:8000/docs |
+| Mailpit (see sent mails) | http://localhost:8025 |
+| ZincSearch UI | http://localhost:4080 (admin / admin123) |
+| Qdrant | http://localhost:6333/dashboard |
+
+**Demo logins** (password `password123`): `support1@infrawatch.dev` (Prod Support), `dev1@infrawatch.dev` (Payments lead), `sre1@infrawatch.dev`, `admin@infrawatch.dev`.
+
+**Try the flow:** log in as support1 → create an incident for *Payments Dev* → check Mailpit (To: group DL, CC: on-call) → log in as dev1 → assign, update status, resolve → fill and submit the runbook → sre1 approves → support1 (or support2) closes.
+
+**Run backend tests without Docker:** `cd backend && python -m tests.smoke` (SQLite, no external services needed).
+
+**Google SSO:** create an OAuth Web client in Google Cloud Console, add `http://localhost:5173` as an authorised JS origin, and set `GOOGLE_CLIENT_ID` in `.env`.
+
+### Implemented in Phase 1
+- JWT + Google SSO auth, teams, on-call roster
+- Incidents with status bar, timeline, group/member assignment
+- Group mail with on-call in CC (via SMTP)
+- Mandatory runbook, SRE/lead review, close-gate (caller or caller's group)
+- Kafka events (`incident.*`, `runbook.published`), ZincSearch indexing
+
+### Not yet built
+Observability (OTel/Prometheus), Change & Request tickets, SLA engine, AI/RAG (Qdrant is provisioned but unused).
+---
+
 ## 📁 Repository Structure
 
 ```
 InfraWatch/
 ├── InfraWatch-Architecture.html   # Visual interactive architecture & workflow dashboard
-├── README.md                      # Project documentation and specifications
+├── README.md
+├── docker-compose.yml
+├── .env.example
+├── backend/                       # FastAPI app (app/), tests/smoke.py
+└── frontend/                      # React + Vite UI
 ```
 
 ---
